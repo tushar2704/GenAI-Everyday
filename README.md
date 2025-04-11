@@ -1,4 +1,5 @@
-# GENAI EVERYDAY
+# GENAI EVERYDAY 
+### Let's work together [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Choose your license -->
 <!-- Add other relevant badges: build status, code coverage, etc. -->
