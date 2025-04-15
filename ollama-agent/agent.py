@@ -86,7 +86,7 @@ class OllamaAgent:
     A simple AI agent that can plan and execute tasks using Ollama.
     """
     def __init__(self, 
-                 model: str = "lqwen2:0.5b", 
+                 model: str = "llama3", 
                  ollama_url: str = "http://localhost:11434",
                  temperature: float = 0.7,
                  max_tokens: int = 1000):
@@ -113,6 +113,8 @@ class OllamaAgent:
         3. Use your available tools when needed to accomplish tasks
         4. Remember important information
         5. Always provide your reasoning before taking actions
+        
+        For most questions, just answer directly and helpfully.
         
         When you need to use a tool, respond in the following format:
         
@@ -189,13 +191,41 @@ class OllamaAgent:
                 return None
                 
             tool_section = response.split("<tool>")[1].split("</tool>")[0].strip()
-            tool_data = json.loads(tool_section)
+            # Fix common JSON formatting issues
+            tool_section = tool_section.replace("'", '"')
+            
+            # Handle case where the model might not format JSON correctly
+            try:
+                tool_data = json.loads(tool_section)
+            except json.JSONDecodeError:
+                # Fallback for malformed JSON - try to extract tool name and parameters directly
+                import re
+                tool_name_match = re.search(r'"tool_name":\s*"([^"]+)"', tool_section)
+                tool_name = tool_name_match.group(1) if tool_name_match else None
+                
+                if not tool_name:
+                    return None
+                    
+                # Try to extract parameters with a more flexible approach
+                params = {}
+                param_pattern = r'"([^"]+)":\s*"([^"]+)"'
+                param_matches = re.finditer(param_pattern, tool_section)
+                
+                for match in param_matches:
+                    key, value = match.groups()
+                    if key != "tool_name":
+                        params[key] = value
+                
+                return {
+                    "tool_name": tool_name,
+                    "parameters": params
+                }
             
             return {
                 "tool_name": tool_data["tool_name"],
-                "parameters": tool_data["parameters"]
+                "parameters": tool_data.get("parameters", {})
             }
-        except (KeyError, IndexError, json.JSONDecodeError) as e:
+        except (KeyError, IndexError, AttributeError) as e:
             print(f"Error parsing tool call: {e}")
             print(f"Response was: {response}")
             return None
@@ -302,6 +332,7 @@ class OllamaAgent:
         
         return final_response
 
+
 class OllamaAgentWithStreaming(OllamaAgent):
     """
     Extension of OllamaAgent that supports streaming responses.
@@ -345,7 +376,7 @@ class OllamaAgentWithStreaming(OllamaAgent):
                             full_response += content
                     except json.JSONDecodeError:
                         pass
-            print()  # New line after streaming completes
+            print("\n")  # New line after streaming completes
             
             return full_response
         except requests.exceptions.RequestException as e:
@@ -356,7 +387,7 @@ class OllamaAgentWithStreaming(OllamaAgent):
     def process_input_streaming(self, user_input: str) -> str:
         """
         Process user input and generate a streaming response.
-        Note: This method doesn't support tool usage during streaming.
+        This simplified version doesn't attempt to parse tool calls during streaming.
         
         Args:
             user_input: The user's message or query
@@ -370,8 +401,10 @@ class OllamaAgentWithStreaming(OllamaAgent):
         # Get memory context
         memory_context = self.memory.get_context()
         
-        # Create a system message with context
-        system_message = self.system_prompt.format(tool_descriptions=self._get_tool_descriptions()) + f"\n\n{memory_context}"
+        # Create a system message with context - for simpler inputs, avoid complex tool usage instructions
+        system_message = """
+        You are a helpful AI assistant. Respond directly to the user's question or request.
+        """
         
         # Create the messages for Ollama
         messages = [
@@ -382,10 +415,7 @@ class OllamaAgentWithStreaming(OllamaAgent):
         # Stream the response from the LLM
         response_text = self._stream_ollama(messages)
         
-        # Process the response (here we don't use tools during streaming for simplicity)
-        # You could add tool processing after streaming if needed
-        
-        # Store the final response in memory
+        # Store the response in memory
         self.memory.add_interaction("assistant", response_text)
         
         return response_text
@@ -487,7 +517,7 @@ def main():
             
         try:
             if use_streaming:
-                # Streaming doesn't support tools yet
+                # Streaming mode - simplified to avoid tool parsing issues
                 response = agent.process_input_streaming(user_input)
             else:
                 print("\nAgent: ", end="")
