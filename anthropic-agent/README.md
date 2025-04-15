@@ -1,6 +1,6 @@
 # Simple AI Agent Implementation: Code Instructions
+#### © 2025 All rights reserved by Author [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
 
-### Let's work together [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
 
 ## Understanding the Core Components
 
