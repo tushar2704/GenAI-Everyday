@@ -1,24 +1,10 @@
-"""
-Simple AI Agent Implementation with Groq  © 2025 All rights reserved by Author [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
-=========================================
-
-This module implements a basic AI agent using the Groq API without any AI agent libraries.
-It demonstrates core agent concepts like:
-1. Task planning
-2. Tool usage
-3. Memory
-4. Reasoning steps
-
-Requirements:
-- Python 3.8+
-- requests package (pip install requests)
-"""
-
 import os
 import json
 import time
 import requests
 import argparse
+import re
+import traceback
 from typing import Dict, List, Any, Callable, Optional, Union
 
 class Tool:
@@ -108,6 +94,7 @@ class GroqAgent:
         self.tools = {}
         self.api_url = "https://api.groq.com/openai/v1/chat/completions"
         
+        # Improved system prompt with double braces to escape formatting
         self.system_prompt = """
         You are a helpful AI assistant that is part of an agent system. Your role is to:
         1. Understand the user's goal or query
@@ -116,21 +103,17 @@ class GroqAgent:
         4. Remember important information
         5. Always provide your reasoning before taking actions
         
-        When you need to use a tool, respond in the following format:
+        When you need to use a tool, respond EXACTLY in the following format (with no additional spaces or newlines):
         
         <reasoning>
         Your step-by-step thought process here
         </reasoning>
         
         <tool>
-        {
-            "tool_name": "name_of_tool",
-            "parameters": {
-                "param1": "value1",
-                "param2": "value2"
-            }
-        }
+        {{"tool_name":"name_of_tool","parameters":{{"param1":"value1","param2":"value2"}}}}
         </tool>
+        
+        IMPORTANT: The tool section must be valid JSON without line breaks between keys and values.
         
         Available tools:
         {tool_descriptions}
@@ -146,6 +129,61 @@ class GroqAgent:
         for name, tool in self.tools.items():
             descriptions.append(f"- {name}: {tool.description}")
         return "\n".join(descriptions)
+    
+    def diagnose_response(self, response: str) -> str:
+        """Diagnostic function to help troubleshoot response parsing issues."""
+        print("\n=== DIAGNOSTIC INFORMATION ===")
+        print(f"Full response length: {len(response)} characters")
+        print(f"Response starts with: {response[:100]}...")
+        print(f"Response ends with: ...{response[-100:]}")
+        
+        # Check for expected XML tags
+        reasoning_tag_open = "<reasoning>" in response
+        reasoning_tag_close = "</reasoning>" in response
+        tool_tag_open = "<tool>" in response
+        tool_tag_close = "</tool>" in response
+        
+        print(f"Contains <reasoning> tag: {reasoning_tag_open}")
+        print(f"Contains </reasoning> tag: {reasoning_tag_close}")
+        print(f"Contains <tool> tag: {tool_tag_open}")
+        print(f"Contains </tool> tag: {tool_tag_close}")
+        
+        # If tool tags are present, extract and analyze the tool section
+        if tool_tag_open and tool_tag_close:
+            try:
+                tool_section = response.split("<tool>")[1].split("</tool>")[0].strip()
+                print("\nTool section:")
+                print(tool_section)
+                
+                # Check for common JSON issues
+                has_single_quotes = "'" in tool_section
+                has_newlines = "\n" in tool_section
+                has_tool_name = "tool_name" in tool_section
+                has_parameters = "parameters" in tool_section
+                
+                print(f"\nTool section contains single quotes: {has_single_quotes}")
+                print(f"Tool section contains newlines: {has_newlines}")
+                print(f"Tool section contains 'tool_name': {has_tool_name}")
+                print(f"Tool section contains 'parameters': {has_parameters}")
+                
+                # Try to parse as JSON and report issues
+                try:
+                    json_data = json.loads(tool_section.replace("'", '"'))
+                    print("✓ Successfully parsed tool section as JSON")
+                except json.JSONDecodeError as e:
+                    print(f"✗ Failed to parse tool section as JSON: {e}")
+                    # Inspect the character at the error position
+                    if hasattr(e, 'pos'):
+                        error_pos = e.pos
+                        context_start = max(0, error_pos - 10)
+                        context_end = min(len(tool_section), error_pos + 10)
+                        print(f"Error at position {error_pos}: ...{tool_section[context_start:error_pos]}[HERE]{tool_section[error_pos:context_end]}...")
+            except Exception as e:
+                print(f"Error analyzing tool section: {e}")
+        
+        print("=== END DIAGNOSTIC INFORMATION ===\n")
+        
+        return "Diagnostic information has been printed to the console."
         
     def _call_groq(self, messages: List[Dict[str, str]]) -> str:
         """
@@ -240,99 +278,141 @@ class GroqAgent:
             return error_msg
         
     def _parse_tool_call(self, response: str) -> Optional[Dict[str, Any]]:
-        """Extract tool call information from the model's response."""
+        """Extract tool call information from the model's response with enhanced error handling."""
         try:
-            # Extract the tool section
-            if "<tool>" not in response:
+            # Check if there's a tool section
+            if "<tool>" not in response or "</tool>" not in response:
                 return None
                 
+            # Extract the tool section
             tool_section = response.split("<tool>")[1].split("</tool>")[0].strip()
-            # Fix common JSON formatting issues
-            tool_section = tool_section.replace("'", '"')
             
-            # Handle case where the model might not format JSON correctly
+            # Debug the tool section
+            print(f"\nDEBUG - Tool section extracted:\n{tool_section}\n")
+            
+            # Normalize JSON formatting issues
+            # Replace single quotes with double quotes
+            normalized = tool_section.replace("'", '"')
+            # Remove newlines and extra whitespace between keys and values
+            normalized = re.sub(r'\s+', ' ', normalized)
+            normalized = re.sub(r'"\s+:', '":', normalized)
+            normalized = re.sub(r':\s+"', ':"', normalized)
+            
+            # Try to parse the normalized JSON
             try:
-                tool_data = json.loads(tool_section)
-            except json.JSONDecodeError:
-                # Fallback for malformed JSON - try to extract tool name and parameters directly
-                import re
-                tool_name_match = re.search(r'"tool_name":\s*"([^"]+)"', tool_section)
-                tool_name = tool_name_match.group(1) if tool_name_match else None
+                tool_data = json.loads(normalized)
+                return {
+                    "tool_name": tool_data["tool_name"],
+                    "parameters": tool_data.get("parameters", {})
+                }
+            except json.JSONDecodeError as e:
+                print(f"JSON decode error: {e}")
                 
-                if not tool_name:
+                # Manual parsing as fallback
+                # Extract tool name using regex
+                tool_name_pattern = r'"tool_name"\s*:\s*"([^"]+)"'
+                tool_name_match = re.search(tool_name_pattern, normalized)
+                
+                if not tool_name_match:
+                    print("Could not find tool_name in response")
                     return None
                     
-                # Try to extract parameters with a more flexible approach
-                params = {}
-                param_pattern = r'"([^"]+)":\s*"([^"]+)"'
-                param_matches = re.finditer(param_pattern, tool_section)
+                tool_name = tool_name_match.group(1)
+                print(f"Extracted tool name: {tool_name}")
                 
-                for match in param_matches:
-                    key, value = match.groups()
-                    if key != "tool_name":
+                # Extract parameters section
+                params = {}
+                params_pattern = r'"parameters"\s*:\s*\{(.+?)\}'
+                params_match = re.search(params_pattern, normalized, re.DOTALL)
+                
+                if params_match:
+                    params_text = params_match.group(1)
+                    # Extract individual parameters
+                    param_pattern = r'"([^"]+)"\s*:\s*"([^"]*)"'
+                    for param_match in re.finditer(param_pattern, params_text):
+                        key, value = param_match.groups()
                         params[key] = value
+                        
+                    print(f"Extracted parameters: {params}")
                 
                 return {
                     "tool_name": tool_name,
                     "parameters": params
                 }
-            
-            return {
-                "tool_name": tool_data["tool_name"],
-                "parameters": tool_data.get("parameters", {})
-            }
-        except (KeyError, IndexError, AttributeError) as e:
+                
+        except Exception as e:
             print(f"Error parsing tool call: {e}")
+            traceback.print_exc()
             print(f"Response was: {response}")
             return None
             
     def _execute_tool(self, tool_call: Dict[str, Any]) -> str:
-        """Execute a tool based on the parsed tool call."""
-        tool_name = tool_call["tool_name"]
-        parameters = tool_call["parameters"]
-        
-        if tool_name not in self.tools:
-            return f"Error: Tool '{tool_name}' not found"
+        """Execute a tool with enhanced error handling."""
+        try:
+            tool_name = tool_call["tool_name"]
+            parameters = tool_call.get("parameters", {})
             
-        tool = self.tools[tool_name]
-        return tool.call(**parameters)
+            if not tool_name:
+                return "Error: No tool name specified"
+                
+            if tool_name not in self.tools:
+                return f"Error: Tool '{tool_name}' not found. Available tools: {', '.join(self.tools.keys())}"
+                
+            tool = self.tools[tool_name]
+            print(f"Executing tool '{tool_name}' with parameters: {parameters}")
+            
+            return tool.call(**parameters)
+        except Exception as e:
+            print(f"Error executing tool: {e}")
+            traceback.print_exc()
+            return f"Error executing tool: {str(e)}"
     
     def _process_response(self, response: str) -> str:
-        """Process the model's response to extract reasoning and potentially execute tools."""
-        # Extract reasoning if present
-        reasoning = ""
-        reasoning_section = ""
-        if "<reasoning>" in response:
-            try:
+        """Process the model's response with enhanced error handling."""
+        try:
+            # Extract reasoning if present
+            reasoning = ""
+            if "<reasoning>" in response and "</reasoning>" in response:
+                try:
+                    reasoning_section = response.split("<reasoning>")[1].split("</reasoning>")[0].strip()
+                    reasoning = f"Reasoning:\n{reasoning_section}\n\n"
+                except IndexError:
+                    print("Warning: Could not extract reasoning section properly")
+            
+            # Check for tool calls
+            tool_call = self._parse_tool_call(response)
+            if tool_call:
+                print(f"Successfully parsed tool call: {tool_call}")
+                tool_result = self._execute_tool(tool_call)
+                
+                # Add the tool usage to memory
+                self.memory.add_interaction(
+                    "agent", 
+                    f"Used tool: {tool_call['tool_name']} with parameters: {tool_call['parameters']}"
+                )
+                self.memory.add_interaction("tool_result", tool_result)
+                
+                # Generate a follow-up response with the tool result
+                return self._generate_follow_up(tool_call, tool_result)
+            
+            # If no tool call, just return the response without the XML tags
+            clean_response = response
+            if "<reasoning>" in response and "</reasoning>" in response:
                 reasoning_section = response.split("<reasoning>")[1].split("</reasoning>")[0].strip()
-                reasoning = f"Reasoning:\n{reasoning_section}\n\n"
-            except IndexError:
-                print("Warning: Could not extract reasoning section properly")
-        
-        # Check for tool calls
-        tool_call = self._parse_tool_call(response)
-        if tool_call:
-            tool_result = self._execute_tool(tool_call)
+                clean_response = response.replace(
+                    f"<reasoning>{reasoning_section}</reasoning>", 
+                    f"I thought about this:\n{reasoning_section}\n\n"
+                )
+                
+            # Remove any tool tags that might be present but couldn't be parsed
+            clean_response = re.sub(r'<tool>.*?</tool>', '', clean_response, flags=re.DOTALL)
             
-            # Add the tool usage to memory
-            self.memory.add_interaction(
-                "agent", 
-                f"Used tool: {tool_call['tool_name']} with parameters: {tool_call['parameters']}"
-            )
-            self.memory.add_interaction("tool_result", tool_result)
-            
-            # Generate a follow-up response with the tool result
-            return self._generate_follow_up(tool_call, tool_result)
-        
-        # If no tool call, just return the response without the XML tags
-        clean_response = response
-        if "<reasoning>" in response and reasoning_section:
-            clean_response = response.replace(
-                f"<reasoning>{reasoning_section}</reasoning>", 
-                f"I thought about this:\n{reasoning_section}\n\n"
-            )
-        
-        return clean_response
+            return clean_response
+        except Exception as e:
+            print(f"Error in _process_response: {e}")
+            traceback.print_exc()
+            # Return a simplified response when processing fails
+            return "I encountered an error while processing my response. Let me try to answer your question directly: " + response.split("</reasoning>")[-1] if "</reasoning>" in response else response
         
     def _generate_follow_up(self, tool_call: Dict[str, Any], tool_result: str) -> str:
         """Generate a follow-up response after executing a tool."""
@@ -383,6 +463,9 @@ class GroqAgent:
             response_text = self._stream_groq(messages)
         else:
             response_text = self._call_groq(messages)
+        
+        # Add diagnostic information
+        self.diagnose_response(response_text)
         
         # Process the response (execute tools if needed)
         # For streaming, we don't process tools yet
@@ -497,8 +580,9 @@ def main():
     
     # Use streaming mode based on argument, or prompt if not provided
     use_streaming = args.streaming
-    if not use_streaming:
-        use_streaming = input("Do you want to use streaming mode? (y/n, default: y): ").strip().lower() != 'n'
+    if not args.streaming:
+        use_streaming_input = input("Do you want to use streaming mode? (y/n, default: y): ").strip().lower()
+        use_streaming = use_streaming_input != 'n'
     
     # Simple interaction loop
     print(f"GroqAgent initialized with model {model}. Type 'exit' to quit.")
@@ -517,6 +601,7 @@ def main():
                 print(response)
         except Exception as e:
             print(f"\nError: {str(e)}")
+            traceback.print_exc()
 
 if __name__ == "__main__":
     main()
