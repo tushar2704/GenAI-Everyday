@@ -1,5 +1,5 @@
 """
-Simple AI Agent Implementation with Ollama
+Simple AI Agent Implementation with Ollama #### © 2025 All rights reserved by Author [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
 =========================================
 
 This module implements a basic AI agent using Ollama without any AI agent libraries.

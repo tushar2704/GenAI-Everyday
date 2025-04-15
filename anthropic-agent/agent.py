@@ -1,5 +1,5 @@
 """
-Simple AI Agent Implementation by [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
+Simple Anthropic AI Agent Implementation #### © 2025 All rights reserved by Author [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
 ==============================
 
 This module implements a basic AI agent using the Anthropic API without any AI agent libraries.
