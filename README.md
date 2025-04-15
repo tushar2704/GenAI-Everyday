@@ -1,9 +1,7 @@
 # GENAI EVERYDAY 
 ### Let's work together [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
-
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) <!-- Choose your license -->
-<!-- Add other relevant badges: build status, code coverage, etc. -->
-<!-- [![Build Status](https://travis-ci.org/your_username/GENAI-EVERYDAY.svg?branch=main)](https://travis-ci.org/your_username/GENAI-EVERYDAY) -->
+#### © 2025 All rights reserved by Author [Tushar Aggarwal](https://www.linkedin.com/in/tusharaggarwalinseec/)
+=========================================
 
 A repository dedicated to exploring, experimenting with, and applying Generative AI concepts and tools in practical, everyday scenarios. Whether you're learning, building small tools, or just curious about how GenAI can be integrated into daily tasks, this is the place to share and discover.
 
