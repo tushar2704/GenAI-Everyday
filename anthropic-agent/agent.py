@@ -97,6 +97,8 @@ class SimpleAgent:
         self.model = model
         self.memory = Memory()
         self.tools = {}
+        
+        # Note: Using double curly braces to escape actual curly braces in the system prompt
         self.system_prompt = """
         You are a helpful AI assistant that is part of an agent system. Your role is to:
         1. Understand the user's goal or query
@@ -112,13 +114,13 @@ class SimpleAgent:
         </reasoning>
         
         <tool>
-        {
+        {{
             "tool_name": "name_of_tool",
-            "parameters": {
+            "parameters": {{
                 "param1": "value1",
                 "param2": "value2"
-            }
-        }
+            }}
+        }}
         </tool>
         
         Available tools:
@@ -150,7 +152,9 @@ class SimpleAgent:
                 "tool_name": tool_data["tool_name"],
                 "parameters": tool_data["parameters"]
             }
-        except (KeyError, IndexError, json.JSONDecodeError):
+        except (KeyError, IndexError, json.JSONDecodeError) as e:
+            print(f"Error parsing tool call: {e}")
+            print(f"Response was: {response}")
             return None
             
     def _execute_tool(self, tool_call: Dict[str, Any]) -> str:
@@ -168,9 +172,13 @@ class SimpleAgent:
         """Process the model's response to extract reasoning and potentially execute tools."""
         # Extract reasoning if present
         reasoning = ""
+        reasoning_section = ""
         if "<reasoning>" in response:
-            reasoning_section = response.split("<reasoning>")[1].split("</reasoning>")[0].strip()
-            reasoning = f"Reasoning:\n{reasoning_section}\n\n"
+            try:
+                reasoning_section = response.split("<reasoning>")[1].split("</reasoning>")[0].strip()
+                reasoning = f"Reasoning:\n{reasoning_section}\n\n"
+            except IndexError:
+                print("Warning: Could not extract reasoning section properly")
         
         # Check for tool calls
         tool_call = self._parse_tool_call(response)
@@ -189,7 +197,7 @@ class SimpleAgent:
         
         # If no tool call, just return the response without the XML tags
         clean_response = response
-        if "<reasoning>" in response:
+        if "<reasoning>" in response and reasoning_section:
             clean_response = response.replace(
                 f"<reasoning>{reasoning_section}</reasoning>", 
                 f"I thought about this:\n{reasoning_section}\n\n"
@@ -199,20 +207,19 @@ class SimpleAgent:
         
     def _generate_follow_up(self, tool_call: Dict[str, Any], tool_result: str) -> str:
         """Generate a follow-up response after executing a tool."""
-        messages = [
-            {
-                "role": "system", 
-                "content": self.system_prompt.format(tool_descriptions=self._get_tool_descriptions())
-            },
-            {
-                "role": "user", 
-                "content": f"I want you to continue helping me after using a tool. You used the tool '{tool_call['tool_name']}' with parameters {json.dumps(tool_call['parameters'])} and got this result:\n\n{tool_result}\n\nPlease analyze this result and continue helping me."
-            }
-        ]
+        # Get memory context
+        memory_context = self.memory.get_context()
         
+        # Create the message with system instructions and context
         response = self.client.messages.create(
             model=self.model,
-            messages=messages,
+            system=self.system_prompt.format(tool_descriptions=self._get_tool_descriptions()) + f"\n\n{memory_context}",
+            messages=[
+                {
+                    "role": "user", 
+                    "content": f"I want you to continue helping me after using a tool. You used the tool '{tool_call['tool_name']}' with parameters {json.dumps(tool_call['parameters'])} and got this result:\n\n{tool_result}\n\nPlease analyze this result and continue helping me."
+                }
+            ],
             max_tokens=1000
         )
         
@@ -234,22 +241,17 @@ class SimpleAgent:
         # Get memory context
         memory_context = self.memory.get_context()
         
-        # Create message with system prompt, memory and user input
-        messages = [
-            {
-                "role": "system", 
-                "content": self.system_prompt.format(tool_descriptions=self._get_tool_descriptions()) + f"\n\n{memory_context}"
-            },
-            {
-                "role": "user", 
-                "content": user_input
-            }
-        ]
-        
-        # Call the Anthropic API
+        # Create message with system prompt, memory, and user input
+        # Note: In Claude's API, system is a separate parameter, not a message role
         response = self.client.messages.create(
             model=self.model,
-            messages=messages,
+            system=self.system_prompt.format(tool_descriptions=self._get_tool_descriptions()) + f"\n\n{memory_context}",
+            messages=[
+                {
+                    "role": "user", 
+                    "content": user_input
+                }
+            ],
             max_tokens=1500
         )
         
@@ -318,8 +320,11 @@ def main():
         if user_input.lower() == "exit":
             break
             
-        response = agent.process_input(user_input)
-        print(f"\nAgent: {response}")
+        try:
+            response = agent.process_input(user_input)
+            print(f"\nAgent: {response}")
+        except Exception as e:
+            print(f"\nError: {str(e)}")
 
 if __name__ == "__main__":
     main()
