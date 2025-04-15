@@ -1,61 +1,104 @@
-# Simple AI Agent using Anthropic API
+# Simple AI Agent Implementation: Code Instructions
 
-A lightweight, pure Python implementation of an AI agent that leverages the Anthropic Claude API without any external AI agent libraries. This project demonstrates fundamental concepts of AI agents including task planning, tool usage, memory management, and reasoning.
+## Understanding the Core Components
 
-## Overview
+This implementation consists of three main classes:
 
-This project provides a simple yet powerful framework for building AI agents from scratch. It's designed to be educational, showing how the core components of AI agents work without the abstraction of existing frameworks.
+1. **Tool**: Represents functionalities the agent can use
+2. **Memory**: Manages the agent's conversation history and knowledge
+3. **SimpleAgent**: The main agent implementation that coordinates everything
 
-### Key Features
+Let's break down each component in detail:
 
-- **Pure Python**: No dependencies on AI agent libraries
-- **Tool System**: Extensible framework for adding capabilities to your agent
-- **Memory Management**: Conversation history and important fact storage
-- **Step-by-Step Reasoning**: Transparent decision-making process
-- **Anthropic Claude Integration**: Leverages state-of-the-art LLMs
+## Tool Class
 
-## Table of Contents
+The `Tool` class is designed to be a wrapper around any function that you want your agent to use. Each tool has:
 
-- [Installation](#installation)
-- [Setup](#setup)
-- [Usage](#usage)
-- [Code Structure](#code-structure)
-- [Component Breakdown](#component-breakdown)
-  - [Tool Class](#tool-class)
-  - [Memory Class](#memory-class)
-  - [SimpleAgent Class](#simpleagent-class)
-- [How It Works](#how-it-works)
-- [Advanced Usage](#advanced-usage)
-- [Customization](#customization)
-- [Example Scenarios](#example-scenarios)
-- [Common Issues](#common-issues)
-- [Best Practices](#best-practices)
-- [Contributing](#contributing)
+- **Name**: Used to identify and call the tool
+- **Description**: Explains what the tool does and its parameters
+- **Function**: The actual implementation that will be executed
 
-## Installation
+The class has a simple interface:
+```python
+tool = Tool(
+    "calculator", 
+    "Perform mathematical calculations. Parameters: expression (str)",
+    calculate_function
+)
 
-1. Clone this repository:
-```bash
-git clone https://github.com/yourusername/simple-ai-agent.git
-cd simple-ai-agent
+# To use the tool
+result = tool.call(expression="2 + 2")
 ```
 
-2. Create a virtual environment:
-```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-```
+When creating custom tools:
+1. Define a function that accepts named parameters
+2. Create a Tool instance with a descriptive name and clear description
+3. Register it with the agent
 
-3. Install required packages:
+## Memory Class
+
+The `Memory` class provides a simple way to store:
+- **Conversation history**: Recent exchanges between user and agent
+- **Important facts**: Key information that should persist
+
+Key methods:
+- `add_interaction(role, content)`: Adds a message to the history
+- `remember_fact(key, value)`: Stores important information
+- `get_fact(key)`: Retrieves stored information
+- `get_context()`: Formats all memory for inclusion in prompts
+
+The memory system has a `max_history` parameter that limits how many past interactions are remembered to prevent context windows from getting too large.
+
+## SimpleAgent Class
+
+The `SimpleAgent` class is the core of the implementation:
+
+1. **Initialization**:
+   - Connects to the Anthropic API
+   - Sets up the memory system
+   - Initializes the tool registry
+   - Defines the system prompt
+
+2. **Tool Management**:
+   - `register_tool(tool)`: Adds a new tool to the agent's capabilities
+   - `_get_tool_descriptions()`: Formats tool information for the prompt
+
+3. **Response Processing**:
+   - `_parse_tool_call(response)`: Extracts tool usage from LLM responses
+   - `_execute_tool(tool_call)`: Runs the specified tool with parameters
+   - `_process_response(response)`: Handles the full response processing flow
+
+4. **Core Functionality**:
+   - `process_input(user_input)`: Main method to handle user messages
+
+## System Prompt
+
+The system prompt is crucial for guiding the agent's behavior. It includes:
+
+1. **Role definition**: What the agent should do
+2. **Task approach**: How to break down problems
+3. **Tool usage format**: How to structure responses when using tools
+4. **Available tools**: List of tools with descriptions
+
+The current system prompt instructs the model to:
+- Structure tool calls in a specific XML format
+- Show reasoning before taking actions
+- Break complex tasks into steps
+
+## How to Run the Code
+
+### Prerequisites
+
+1. Python 3.8 or newer
+2. Anthropic API key
+
+### Step 1: Install Dependencies
+
 ```bash
 pip install anthropic
 ```
 
-## Setup
-
-1. Obtain an API key from Anthropic: [https://console.anthropic.com/](https://console.anthropic.com/)
-
-2. Set your API key as an environment variable:
+### Step 2: Set Up Your API Key
 
 ```bash
 # Linux/Mac
@@ -68,378 +111,120 @@ set ANTHROPIC_API_KEY=your-api-key-here
 $env:ANTHROPIC_API_KEY="your-api-key-here"
 ```
 
-Alternatively, you can modify the `main()` function to read the API key from a configuration file or pass it directly.
+### Step 3: Create Your Script
 
-## Usage
+Save the provided code as `anthropic-agent/agent.py`.
 
-### Basic Usage
-
-The repository contains a single Python file (`ai_agent.py`) with a working example. Run it with:
+### Step 4: Run the Agent
 
 ```bash
-python ai_agent.py
+python anthropic-agent/agent.py
 ```
 
-This will start an interactive session where you can chat with your agent. Type `exit` to quit.
+The default implementation includes an interactive loop where you can chat with the agent and see it use tools.
 
-### Example Interaction
+## Customizing the Agent
 
-```
-SimpleAgent initialized. Type 'exit' to quit.
+### Adding Custom Tools
 
-You: What's the current time?
-
-Agent: I'll get the current time for you.
-
-Reasoning:
-You've asked for the current time, which I can retrieve using the get_time tool that's available to me. This tool doesn't require any parameters.
-
-Current time: 2025-04-15 14:32:17
-
-You: Can you calculate 15 * 24 + 7?
-
-Agent: I'll calculate that expression for you.
-
-Reasoning:
-You've asked me to calculate the mathematical expression 15 * 24 + 7. I'll use the calculate tool for this.
-
-The calculation 15 * 24 + 7 equals 367.
-First, I multiply 15 by 24 to get 360, then add 7 to get 367.
-
-You: exit
-```
-
-### Creating Your Own Script
-
-Here's a minimal script to create and use the agent:
-
+1. **Define your function**:
 ```python
-from ai_agent import SimpleAgent, Tool
+def analyze_sentiment(text: str) -> str:
+    """Analyze the sentiment of text (positive/negative)."""
+    # In a real implementation, use a sentiment analysis library
+    # This is a simple placeholder
+    if "good" in text.lower() or "great" in text.lower():
+        return "Positive sentiment detected"
+    elif "bad" in text.lower() or "terrible" in text.lower():
+        return "Negative sentiment detected"
+    return "Neutral sentiment"
+```
 
-# Create the agent
-agent = SimpleAgent(api_key="your-api-key-here")
-
-# Define a simple tool
-def hello_world(name="World"):
-    return f"Hello, {name}!"
-
-# Register the tool
+2. **Register it with the agent**:
+```python
 agent.register_tool(Tool(
-    "hello", 
-    "Say hello to someone. Parameters: name (str, optional)",
-    hello_world
+    "analyze_sentiment",
+    "Analyze text sentiment. Parameters: text (str)",
+    analyze_sentiment
 ))
-
-# Use the agent
-response = agent.process_input("Can you say hello to John?")
-print(response)
 ```
 
-## Code Structure
+### Modifying the System Prompt
 
-The implementation consists of three main classes:
-
-1. **Tool**: Represents a function that the agent can use to interact with external systems
-2. **Memory**: Manages conversation history and important facts
-3. **SimpleAgent**: Main agent class that processes inputs and generates responses
-
-## Component Breakdown
-
-### Tool Class
-
-The `Tool` class represents a capability that the agent can use to perform actions or retrieve information.
+You can customize the agent's behavior by changing the system prompt:
 
 ```python
-Tool(
-    name="search",  # Name used to call the tool
-    description="Search the web for information. Parameters: query (str)",  # Explains how to use it
-    function=search_web  # The actual function to call
-)
-```
-
-Each tool has:
-- A **name** for identification
-- A **description** that explains its purpose and parameters
-- A **function** that performs the actual work
-
-### Memory Class
-
-The `Memory` class stores:
-- Conversation history (limited to the most recent exchanges)
-- Important facts that should persist
-
-```python
-# Store user input
-memory.add_interaction("user", "What's the weather today?")
-
-# Remember important information
-memory.remember_fact("user_location", "New York")
-
-# Retrieve context for decision making
-context = memory.get_context()
-```
-
-### SimpleAgent Class
-
-The `SimpleAgent` class ties everything together:
-
-1. Manages tools and memory
-2. Processes user inputs
-3. Calls the Anthropic API
-4. Parses responses to execute tools when needed
-5. Handles follow-up interactions
-
-Key methods:
-- `register_tool()`: Adds a new tool to the agent
-- `process_input()`: Handles user requests
-- `_parse_tool_call()`: Extracts tool usage from responses
-- `_execute_tool()`: Runs tools when needed
-- `_generate_follow_up()`: Creates follow-up responses after tool execution
-
-## How It Works
-
-1. **User Input Processing**:
-   - User sends a message to the agent
-   - The message is stored in memory
-   - The agent formulates a prompt including the system instructions, memory context, and user message
-
-2. **LLM Response Generation**:
-   - The prompt is sent to the Anthropic API
-   - The model generates a response that may include reasoning and tool usage
-
-3. **Tool Usage (if needed)**:
-   - If the response includes a tool call, the agent parses it
-   - The tool is executed with the specified parameters
-   - The result is stored in memory
-
-4. **Follow-Up Handling**:
-   - If a tool was used, the agent generates a follow-up response incorporating the tool results
-   - The final response is returned to the user and stored in memory
-
-## Advanced Usage
-
-### Custom System Prompt
-
-The system prompt defines the agent's behavior. You can customize it by modifying the `system_prompt` attribute:
-
-```python
-agent = SimpleAgent(api_key)
 agent.system_prompt = """
-You are a specialized financial advisor agent. Your role is to:
-1. Help users understand their financial situation
-2. Provide investment advice
-3. Use tools to calculate financial metrics
-4. Always explain financial terms in simple language
+You are a specialized customer service AI. Your goal is to:
+1. Help users with their queries
+2. Use tools to retrieve information when needed
+3. Always maintain a friendly and helpful tone
 
 When you need to use a tool, respond in the following format:
 ...
 """
 ```
 
-### Creating Complex Tools
+### Extending the Memory System
 
-Tools can perform complex operations and integrate with external services:
-
-```python
-import requests
-
-def weather_tool(location: str) -> str:
-    """Get weather information for a location."""
-    api_key = "your-weather-api-key"
-    url = f"https://api.weatherservice.com/current?location={location}&key={api_key}"
-    
-    try:
-        response = requests.get(url)
-        data = response.json()
-        return f"Weather in {location}: {data['temp']}°C, {data['condition']}"
-    except Exception as e:
-        return f"Error getting weather for {location}: {str(e)}"
-
-agent.register_tool(Tool(
-    "weather",
-    "Get current weather. Parameters: location (str)",
-    weather_tool
-))
-```
-
-### Persistent Memory
-
-To make the agent remember information across sessions:
+To add more sophisticated memory:
 
 ```python
-import json
-
-# Save memory to file
-def save_memory(agent, filename="memory.json"):
-    with open(filename, "w") as f:
-        json.dump({
-            "history": agent.memory.history,
-            "facts": agent.memory.important_facts
-        }, f)
-
-# Load memory from file
-def load_memory(agent, filename="memory.json"):
-    try:
-        with open(filename, "r") as f:
-            data = json.load(f)
-            agent.memory.history = data["history"]
-            agent.memory.important_facts = data["facts"]
-    except FileNotFoundError:
-        print("No saved memory found.")
-```
-
-## Customization
-
-### Creating Specialized Agents
-
-You can extend the `SimpleAgent` class to create specialized agents:
-
-```python
-class ResearchAgent(SimpleAgent):
-    def __init__(self, api_key):
-        super().__init__(api_key)
-        self.system_prompt = """You are a research assistant..."""
+class EnhancedMemory(Memory):
+    def __init__(self, max_history=10):
+        super().__init__(max_history)
+        self.conversation_summary = ""
         
-        # Register research-specific tools
-        self.register_tool(Tool("search_papers", "Search academic papers", search_papers))
-        self.register_tool(Tool("summarize", "Summarize text", summarize_text))
-```
-
-### Adding Authentication to Tools
-
-For tools that need authentication:
-
-```python
-def secured_tool(api_key=None, **kwargs):
-    """A tool that requires authentication."""
-    if not api_key:
-        return "Error: Authentication required"
+    def summarize_conversation(self):
+        """Create a summary of the conversation so far."""
+        # In a real implementation, you might use an LLM to generate this
+        messages = [f"{m['role']}: {m['content']}" for m in self.history]
+        summary = "\n".join(messages)
+        self.conversation_summary = f"Summary of {len(messages)} messages: {summary}"
         
-    # Continue with authenticated operation
-    return "Operation completed successfully"
-
-# When registering, wrap with a function that supplies the API key
-agent.register_tool(Tool(
-    "secure_operation",
-    "Perform a secure operation. Parameters: param1 (str)",
-    lambda **kwargs: secured_tool(api_key="my-secret-key", **kwargs)
-))
+    def get_context(self):
+        """Get enhanced memory context including summary."""
+        base_context = super().get_context()
+        return f"{base_context}\n\nConversation Summary:\n{self.conversation_summary}"
 ```
 
-## Example Scenarios
+## Teaching Tips
 
-### Creating a Research Assistant
+When presenting this code in your teaching session:
 
-```python
-# Create research tools
-def search_papers(query, limit=5):
-    # Simulate paper search
-    return f"Found {limit} papers on '{query}'"
+1. **Start with the basics**:
+   - Explain what an AI agent is
+   - Show how tools extend an LLM's capabilities
+   - Demonstrate the importance of memory for context
 
-def extract_summary(paper_id):
-    # Simulate extracting summary
-    return f"Summary of paper {paper_id}: This research shows..."
+2. **Build incrementally**:
+   - First show a simple agent without tools
+   - Add tools one by one
+   - Demonstrate how memory enhances capabilities
 
-# Create the agent
-agent = SimpleAgent(api_key)
+3. **Interactive exercises**:
+   - Have participants create their own tools
+   - Challenge them to extend the memory system
+   - Ask them to customize the agent for specific use cases
 
-# Register tools
-agent.register_tool(Tool("search_papers", "Search academic papers. Parameters: query (str), limit (int, optional)", search_papers))
-agent.register_tool(Tool("get_summary", "Get paper summary. Parameters: paper_id (str)", extract_summary))
+4. **Common pitfalls to discuss**:
+   - Tool errors and how to handle them
+   - Context limitations and strategies
+   - Prompt engineering for reliable tool usage
 
-# Example usage
-response = agent.process_input("Find me papers about quantum computing and summarize the most relevant one")
-```
+5. **Advanced topics**:
+   - Creating multi-agent systems
+   - Implementing planning capabilities
+   - Adding state machines for complex workflows
 
-### Creating a Data Analysis Assistant
+## Final Notes
 
-```python
-import pandas as pd
-import matplotlib.pyplot as plt
-import base64
-from io import BytesIO
+This implementation is deliberately simple to show the core concepts, but it can be extended in many ways:
 
-# Create data analysis tools
-def load_csv(url):
-    """Load CSV data."""
-    df = pd.read_csv(url)
-    return f"Loaded data with {len(df)} rows and columns: {', '.join(df.columns)}"
+- Adding more sophisticated memory systems
+- Implementing planning algorithms
+- Creating specialized agents for different domains
+- Adding authentication and security features
+- Implementing web interfaces or API endpoints
 
-def generate_plot(data_url, x_col, y_col):
-    """Generate a plot from data."""
-    df = pd.read_csv(data_url)
-    plt.figure(figsize=(10, 6))
-    plt.plot(df[x_col], df[y_col])
-    plt.xlabel(x_col)
-    plt.ylabel(y_col)
-    plt.title(f"{y_col} vs {x_col}")
-    
-    # Save plot to a base64 string
-    buffer = BytesIO()
-    plt.savefig(buffer, format='png')
-    buffer.seek(0)
-    image_base64 = base64.b64encode(buffer.read()).decode('utf-8')
-    
-    return f"Plot generated. Data: data:image/png;base64,{image_base64}"
-
-# Register tools
-agent.register_tool(Tool("load_csv", "Load CSV data. Parameters: url (str)", load_csv))
-agent.register_tool(Tool("plot", "Create a plot. Parameters: data_url (str), x_col (str), y_col (str)", generate_plot))
-```
-
-## Common Issues
-
-### API Key Issues
-
-**Problem**: "API key not found" or authentication errors
-**Solution**: Ensure your API key is correctly set as an environment variable or passed directly to the SimpleAgent constructor.
-
-### Tool Execution Errors
-
-**Problem**: Tool fails to execute properly
-**Solution**: 
-- Make sure all required parameters are provided
-- Add error handling in your tool functions
-- Check the format of the tool call in the agent's response
-
-### Memory Limitations
-
-**Problem**: Agent forgets important information
-**Solution**:
-- Increase the `max_history` parameter in the Memory class
-- Use `remember_fact` to store critical information explicitly
-- Implement persistent memory storage
-
-### Anthropic API Limits
-
-**Problem**: Hitting rate limits or token limits
-**Solution**:
-- Add retry logic with exponential backoff
-- Optimize prompts to use fewer tokens
-- Split complex tasks into smaller interactions
-
-## Best Practices
-
-1. **Tool Design**:
-   - Keep tools focused on a single responsibility
-   - Provide clear error messages when tools fail
-   - Document required parameters and expected outputs
-
-2. **System Prompt Engineering**:
-   - Be explicit about the agent's role and capabilities
-   - Include clear instructions for tool usage format
-   - Specify error handling procedures
-
-3. **Memory Management**:
-   - Store only essential information as important facts
-   - Summarize long conversations to save context space
-   - Implement a caching strategy for frequently used data
-
-4. **Security Considerations**:
-   - Never expose API keys or sensitive data in responses
-   - Validate user inputs before executing tools
-   - Limit the capabilities of tools to prevent misuse
-
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
+The code provides a solid foundation that you can build upon for your specific needs.
