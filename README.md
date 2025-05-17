@@ -78,8 +78,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 *   Mention any key resources, inspirations, or contributors you'd like to thank.
 *   Links to foundational papers or tools.
 
----
 
-*Happy Generating!*
 
 
